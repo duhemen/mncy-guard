@@ -26,15 +26,15 @@ Mncy-Guard adalah solusi **Intelligent Network Monitoring** yang dirancang untuk
 ## 🛠 Instalasi
 1. Pastikan Python telah terinstal di sistem Anda, lalu jalankan perintah berikut di terminal:
 2. Clone repository:
-   - Bash:
-     - git clone [https://github.com/duhemen/mncy-guard.git](https://github.com/duhemen/mncy-guard.git)
-     - cd mncy-guard
+   ```Bash:
+     git clone [https://github.com/duhemen/mncy-guard.git](https://github.com/duhemen/mncy-guard.git)
+     cd mncy-guard
 3. Instal dependensi:
-  - Bash:
-    - pip install -r requirements.txt
+   ```Bash:
+    pip install -r requirements.txt
 4. Jalankan aplikasi:
-  - Bash:
-    - python main.py
+   ```Bash:
+    python main.py
 ## 📜 Lisensi
 Proyek ini dilisensikan di bawah MIT License.
 Dibuat dengan dedikasi untuk keamanan jaringan.
