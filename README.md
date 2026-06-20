@@ -25,7 +25,7 @@ Mncy-Guard adalah aplikasi pemantauan jaringan cerdas (*intelligent network moni
    cd mncy-guard
    Jalankan aplikasi:
 
-3. Bash
+4. Bash
    python main.py
 
 📜 Lisensi
