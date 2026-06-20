@@ -11,17 +11,19 @@ Mncy-Guard adalah solusi **Intelligent Network Monitoring** yang dirancang untuk
 
 ## 📑 Daftar Isi
 - [Fitur Utama](#-fitur-utama)
-- [Struktur Proyek](#-struktur-proyek)
 - [Instalasi](#-instalasi)
 - [Lisensi](#-lisensi)
+- [Struktur Proyek](#-struktur-proyek)
 
 ---
 
 ## 🚀 Fitur Utama
-*(Isi konten Fitur Utama di sini...)*
+* **Real-time Traffic Monitoring:** Visualisasi aliran data jaringan secara langsung.
+* **Stateful Behavior Detection:** Analisis mendalam untuk mendeteksi anomali.
+* **Smart Filtering Engine:** Membedakan trafik sah vs mencurigakan dengan cerdas.
+* **Quarantine Manager:** Isolasi koneksi IP berbahaya dengan satu klik.
 
-## 📂 Struktur Proyek
-*(Isi konten Struktur Proyek di sini...)*
+
 
 ## 🛠 Instalasi
 1. Pastikan Python telah terinstal di sistem Anda, lalu jalankan perintah berikut di terminal:
@@ -38,3 +40,14 @@ Mncy-Guard adalah solusi **Intelligent Network Monitoring** yang dirancang untuk
 ## 📜 Lisensi
 Proyek ini dilisensikan di bawah MIT License.
 Dibuat dengan dedikasi untuk keamanan jaringan.
+
+## 📂 Struktur Proyek
+Proyek ini diorganisir secara modular agar mudah dikembangkan:
+
+```text
+mncy-guard/
+├── core/         # Mesin deteksi & analisis keamanan
+├── ui/           # Antarmuka dasbor (GUI)
+├── db/           # Manajemen database ancaman
+├── config.py     # Konfigurasi variabel aplikasi
+└── main.py       # Titik masuk utama aplikasi
