@@ -1,39 +1,53 @@
-![Mncy-Guard Banner](https://github.com/duhemen/mncy-guard/raw/main/baner.png)
-Mncy-Guard (Gadis Cantik Putri Iklan)
-Mncy-Guard adalah aplikasi pemantauan jaringan cerdas (intelligent network monitoring) yang dirancang untuk memberikan transparansi dan keamanan pada trafik sistem secara real-time.
+# 🛡️ Mncy-Guard (Gadis Cantik Putri Iklan)
 
-Fitur Utama
-Real-time Traffic Monitoring: Visualisasi aliran data jaringan secara langsung melalui dasbor.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
 
-Stateful Behavior Detection: Menganalisis pola trafik untuk mendeteksi potensi ancaman keamanan.
+Mncy-Guard adalah solusi **Intelligent Network Monitoring** yang dirancang untuk memberikan transparansi dan keamanan pada trafik sistem Anda secara *real-time*.
 
-Smart Filtering Engine: Membedakan trafik sistem yang sah dengan trafik mencurigakan.
-
-Quarantine Manager: Isolasi koneksi IP yang dianggap berbahaya dengan cepat.
-
-Cara Instalasi
-Pastikan Python sudah terinstal di kompute.
-
-Clone repository ini:
-
-Bash
-git clone https://github.com/duhemen/mncy-guard.git
-3. Masuk ke folder proyek:
-   ```bash
-   cd mncy-guard
-Jalankan aplikasi:
-
-Bash
-python main.py
-
-## Lisensi
-Proyek ini dilisensikan di bawah **MIT License**.
+![Mncy-Guard Banner](baner.png)
 
 ---
 
-### Langkah Terakhir:
-1. Setelah teks di atas ditempel di kolom, scroll ke bawah ke bagian **"Commit changes"**.
-2. Klik tombol **"Commit changes"** (biarkan pesan commit default-nya "Create README.md").
-3. Selesai!
+## 📑 Daftar Isi
+- [Fitur Utama](#-fitur-utama)
+- [Instalasi](#-instalasi)
+- [Lisensi](#-lisensi)
+- [Struktur Proyek](#-struktur-proyek)
 
-Sekarang, siapa pun yang membuka tautan GitHub Emen akan langsung tahu betapa kerennya proyek "G
+---
+
+## 🚀 Fitur Utama
+* **Real-time Traffic Monitoring:** Visualisasi aliran data jaringan secara langsung.
+* **Stateful Behavior Detection:** Analisis mendalam untuk mendeteksi anomali.
+* **Smart Filtering Engine:** Membedakan trafik sah vs mencurigakan dengan cerdas.
+* **Quarantine Manager:** Isolasi koneksi IP berbahaya dengan satu klik.
+
+
+
+## 🛠 Instalasi
+1. Pastikan Python telah terinstal di sistem Anda, lalu jalankan perintah berikut di terminal:
+2. Clone repository:
+   ```Bash:
+     git clone [https://github.com/duhemen/mncy-guard.git](https://github.com/duhemen/mncy-guard.git)
+     cd mncy-guard
+3. Instal dependensi:
+   ```Bash:
+    pip install -r requirements.txt
+4. Jalankan aplikasi:
+   ```Bash:
+    python main.py
+## 📜 Lisensi
+Proyek ini dilisensikan di bawah MIT License.
+Dibuat dengan dedikasi untuk keamanan jaringan.
+
+## 📂 Struktur Proyek
+Proyek ini diorganisir secara modular agar mudah dikembangkan:
+
+```text
+mncy-guard/
+├── core/         # Mesin deteksi & analisis keamanan
+├── ui/           # Antarmuka dasbor (GUI)
+├── db/           # Manajemen database ancaman
+├── config.py     # Konfigurasi variabel aplikasi
+└── main.py       # Titik masuk utama aplikasi
