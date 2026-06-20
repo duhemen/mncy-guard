@@ -1,3 +1,4 @@
+import sys
 import tkinter as tk
 from tkinter import ttk, simpledialog, messagebox
 import ttkbootstrap as ttk
@@ -132,38 +133,36 @@ class Dashboard(ttk.Window):
         self.data_queue.put((src_ip, dst_ip))
 
     def process_queue(self):
-        if not self.data_queue.empty():
-            while not self.data_queue.empty():
-                src_ip, dst_ip = self.data_queue.get()
-                target = dst_ip if dst_ip is not None else "Unknown"
-                if src_ip != "N/A":
-                    # Gunakan self.G (bukan self.graph)
-                    if self.is_threat(src_ip):
-                        self.G.add_edge(src_ip, target, color='red', weight=2)
-                    else:
-                        self.G.add_edge(src_ip, target, color='green', weight=1)
+        try:
+            if not self.data_queue.empty():
+                while not self.data_queue.empty():
+                    src_ip, dst_ip = self.data_queue.get()
+                    target = dst_ip if dst_ip is not None else "Unknown"
+                    if src_ip != "N/A":
+                        if self.is_threat(src_ip):
+                            self.G.add_edge(src_ip, target, color='red', weight=2)
+                        else:
+                            self.G.add_edge(src_ip, target, color='green', weight=1)
 
-            # Render grafik
-            try:
-                self.ax.clear()
-                self.ax.set_facecolor('#2c3e50')
-                pos = nx.spring_layout(self.G, k=0.5, seed=42)
-            
-                # Gambar node dan edge
-                nx.draw_networkx_nodes(self.G, pos, ax=self.ax, node_size=300, node_color='cyan')
-                nx.draw_networkx_labels(self.G, pos, ax=self.ax, font_size=8, font_color='white')
-            
-                # Gambar edge dengan warna dinamis
-                edges = self.G.edges(data=True)
-                for u, v, d in edges:
-                    color = d.get('color', 'green')
-                    nx.draw_networkx_edges(self.G, pos, ax=self.ax, edgelist=[(u, v)], edge_color=color, width=2)
-            
-                self.canvas.draw()
-            except Exception:
-                pass
-            
-        self.after(1000, self.process_queue)
+                # Render grafik dengan proteksi
+                if hasattr(self, 'ax') and hasattr(self, 'G'):
+                    self.ax.clear()
+                    self.ax.set_facecolor('#2c3e50')
+                    pos = nx.spring_layout(self.G, k=0.5, seed=42)
+                    
+                    nx.draw_networkx_nodes(self.G, pos, ax=self.ax, node_size=300, node_color='cyan')
+                    nx.draw_networkx_labels(self.G, pos, ax=self.ax, font_size=8, font_color='white')
+                    
+                    for u, v, d in self.G.edges(data=True):
+                        nx.draw_networkx_edges(self.G, pos, ax=self.ax, edgelist=[(u, v)], edge_color=d.get('color', 'green'), width=2)
+                    
+                    self.canvas.draw()
+        except Exception as e:
+            # Mengabaikan error render sementara agar UI tidak crash
+            pass
+        finally:
+            # Tetap panggil setelah 1 detik, apapun yang terjadi
+            self.after(1000, self.process_queue)
     
     def apply_filter(self, event=None):
         """Fungsi untuk menyaring paket berdasarkan pilihan filter."""

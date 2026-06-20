@@ -1,23 +1,34 @@
+# --- Import Modul & Konfigurasi ---
 import threading
 import time
+import socket
+import subprocess
+import asyncio
+from tkinter import simpledialog
+from plyer import notification
+
+# Mengambil konfigurasi dari file config.py
+from config import SCAN_INTERVAL, INTERFACE
+
+# Import komponen internal proyek
 from ui.dashboard import Dashboard
 from core.detector import scan_processes
 from core.sniffer import NetworkSniffer
 from core.network_manager import get_process_by_port
 from db.database import init_db, log_threat
 from core.analyzer import analyze_nmap, analyze_beaconing, analyze_stateful_behavior
-import subprocess
-from tkinter import simpledialog
-from plyer import notification
-from core.network_shield import detect_arp_spoofing, detect_flooding
+from core.network_shield import detect_arp_spoofing, detect_flooding, quarantine_process, release_process, get_quarantine_data
 from core.mitigator import block_ip
-import asyncio
-from core.network_shield import quarantine_process, release_process, get_quarantine_data
-from core.network_shield import detect_arp_spoofing
 from core.engine import engine
 from core.intelligence import threat_list
-import socket
 from core.whitelist import WHITELISTED_IPS
+
+# --- Pesan Pembuka Profesional ---
+print("========================================")
+print("Mncy-Guard v1.0 | Mengaktifkan perlindungan jaringan...")
+print(f"Mode Scan: {SCAN_INTERVAL} detik")
+print(f"Interface Aktif: {INTERFACE}")
+print("========================================")
 
 # Inisialisasi Database
 init_db()
