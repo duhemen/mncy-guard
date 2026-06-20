@@ -64,7 +64,7 @@ def analyze_beaconing(src_ip, dst, proto, pid, name):
 
 connection_state = {} 
 
-def analyze_stateful_behavior(src_ip, dst_ip):
+def analyze_stateful_behavior(src_ip, dst_ip, proto="N/A", pid="N/A", proc_name="N/A"):
     """
     Mendeteksi pola beaconing (komunikasi teratur/berulang)
     yang merupakan ciri khas botnet/C2.

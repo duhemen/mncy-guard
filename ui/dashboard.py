@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import networkx as nx
 import queue
+from ui.widgets import SummaryCard, HealthCard
 
 class Dashboard(ttk.Window):
 
@@ -45,6 +46,16 @@ class Dashboard(ttk.Window):
         self.filter_combo['values'] = ("All", "TCP", "UDP", "ARP", "IP")
         self.filter_combo.pack(fill=X, pady=5)
         self.filter_combo.bind("<<ComboboxSelected>>", self.apply_filter)
+
+        # --- Tambahan Widget Statistik ---
+        self.stats_frame = ttk.Frame(self.main_tab)
+        self.stats_frame.pack(fill=X, padx=10, pady=10)
+
+        # Inisialisasi kartu-kartu statistik
+        self.card_threats = SummaryCard(self.stats_frame, "Ancaman", "0", "danger")
+        self.card_packets = SummaryCard(self.stats_frame, "Total Paket", "0", "info")
+        self.card_status = HealthCard(self.stats_frame, "Kesehatan", "100", "success")
+        # ---------------------------------
 
         # Tabel Data Capture (Di dalam main_tab)
         cols = ("Time", "Src", "Dst", "Proto", "PID", "Process", "Status")
@@ -118,6 +129,14 @@ class Dashboard(ttk.Window):
 
     # --- FUNGSI FUNGSI ---
 
+    def update_stats(self, threat_count=None, packet_count=None):
+        """Memperbarui nilai pada kartu statistik."""
+        if threat_count is not None:
+            self.card_threats.update_value(str(threat_count))
+        
+        if packet_count is not None:
+            self.card_packets.update_value(str(packet_count))
+
     def setup_graph(self):
         import networkx as nx
         self.G = nx.Graph() 
@@ -165,14 +184,53 @@ class Dashboard(ttk.Window):
             self.after(1000, self.process_queue)
     
     def apply_filter(self, event=None):
-        """Fungsi untuk menyaring paket berdasarkan pilihan filter."""
         selected_filter = self.filter_combo.get()
         print(f"Filtering by: {selected_filter}")
         
-        # Logika penyaringan:
-        # 1. Hapus semua item di treeview utama
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        # Ambil semua item dari tree_net (bukan self.tree, sesuaikan dengan milik Emen)
+        for item in self.tree_net.get_children():
+            # Ambil nilai dari kolom ke-3 (index 3 adalah kolom 'proto')
+            values = self.tree_net.item(item, 'values')
+            proto = values[3] 
+            
+            # Logika: Detach jika tidak cocok, Reattach jika cocok atau pilih 'All'
+            if selected_filter == "All":
+                self.tree_net.reattach(item, '', 'end')
+            elif proto.upper() == selected_filter.upper():
+                self.tree_net.reattach(item, '', 'end')
+            else:
+                self.tree_net.detach(item)
+
+    def add_packet_row(self, src, dst, proto, pid, proc_name):
+        try:
+            time_str = datetime.datetime.now().strftime("%H:%M:%S")
+        
+            # 1. Insert paket baru di posisi paling atas (index 0)
+            item = self.tree_net.insert("", 0, values=(
+                time_str, src, dst, proto, pid, proc_name, "Captured"
+            ))
+        
+            # 2. Beri warna jika "ATTACK" atau indikator ancaman
+            # Pastikan di bagian setup GUI kamu sudah mendefinisikan tag 'danger' dengan background merah
+            if "ATTACK" in str(proc_name):
+                self.tree_net.item(item, tags=('danger',))
+        
+            # 3. KUNCI: Cek filter aktif (Filter view agar tidak memakan layar)
+            selected_filter = self.filter_combo.get().upper()
+            proto_val = str(proto).upper()
+        
+            if selected_filter != "ALL" and selected_filter not in proto_val:
+                self.tree_net.detach(item) # Sembunyikan dari tampilan tanpa hapus data
+        
+            # 4. Limit baris agar aplikasi tetap ringan (Rolling Buffer)
+            # Kita ambil semua children yang ada, termasuk yang di-detach
+            children = self.tree_net.get_children()
+            if len(children) > 100:
+                # Hapus yang paling tua (baris paling bawah)
+                self.tree_net.delete(children[-1])
+            
+        except Exception as e:
+            print(f"GUI Update Error: {e}")
 
     def sort_column(self, tv, col, reverse):
         """Fungsi untuk mengurutkan isi kolom Treeview saat header diklik."""
@@ -369,36 +427,6 @@ class Dashboard(ttk.Window):
                 self.log(f"Reputasi {proc.name()}: {info}")
             except Exception as e:
                 self.log(f"Gagal cek: {e}")
-
-
-    def add_packet_row(self, src, dst, proto, pid, proc_name):
-        try:
-            time_str = datetime.datetime.now().strftime("%H:%M:%S")
-            
-            # Masukkan data ke tabel
-            item = self.tree_net.insert("", 0, values=(
-                time_str, src, dst, proto, pid, proc_name, "Captured"
-            ))
-            
-            # Jika "ATTACK" dalam nama proses, beri warna merah (tag 'danger')
-            if "ATTACK" in proc_name:
-                self.tree_net.item(item, tags=('danger',))
-            
-            # Cek filter yang sedang aktif
-            # Gunakan getattr agar aplikasi tidak crash jika filter_var belum terdefinisi
-            selected_proto = getattr(self, 'filter_var', tk.StringVar(value="All")).get()
-            
-            if selected_proto != "All" and proto.upper() != selected_proto.upper():
-                self.tree_net.detach(item) 
-            
-            # Logika auto-scroll & batas 100 baris
-            self.tree_net.yview_moveto(0)
-            children = self.tree_net.get_children()
-            if len(children) > 100:
-                self.tree_net.delete(children[-1])
-                
-        except Exception as e:
-            print(f"GUI Update Error: {e}")
 
     def log(self, message):
         self.status_label.config(text=message)

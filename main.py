@@ -38,6 +38,10 @@ sniffer_instance = None
 monitor_running = True # Flag untuk menghentikan loop scanner
 packet_count_per_second = 0
 
+# Tambahkan ini:
+total_packets = 0
+total_threats = 0
+
 def get_current_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -79,85 +83,91 @@ def trigger_alert(threat_msg, ip_target):
     threading.Thread(target=show, daemon=True).start()
 
 def on_packet_captured(packet):
-    global packet_count_per_second
+    global packet_count_per_second, total_packets, total_threats
     packet_count_per_second += 1
+    total_packets += 1
     
-    try:
-        # 1. Inisialisasi data default
-        src_ip, dst_ip, proto = "N/A", "N/A", "N/A"
-        pid, proc_name = "N/A", "Unknown"
+    # 1. Inisialisasi Data Default
+    src_ip, dst_ip = "N/A", "N/A"
+    proto = "Unknown"
+    pid, proc_name = "N/A", "Unknown"
+
+    # 2. Ekstraksi Data (Layering)
+    if hasattr(packet, 'arp'):
+        src_ip, dst_ip, proto = packet.arp.src_proto_ipv4, packet.arp.dst_proto_ipv4, "ARP"
+    
+    elif 'IP' in packet or 'IPV6' in packet:
+        ip_layer = packet.ip if 'IP' in packet else packet.ipv6
+        src_ip, dst_ip = ip_layer.src, ip_layer.dst
+        proto = packet.transport_layer if hasattr(packet, 'transport_layer') else "IP"
         
-        # 2. Tangkap Data (Tanpa elif, agar semua jenis paket diproses)
+        # Ambil PID dan Nama Proses
+        if hasattr(packet, 'transport_layer'):
+            try:
+                src_port = int(packet[packet.transport_layer].srcport)
+                pid, proc_name = get_process_by_port(src_port)
+            except:
+                pid, proc_name = "N/A", "Unknown"
+
+    # 3. Analisis Ancaman (Berjalan untuk SEMUA paket)
+    # Analisis Beaconing
+    # 1. ANALISIS PERILAKU
+    is_beaconing, msg = analyze_stateful_behavior(src_ip, dst_ip, proto, pid, proc_name)
+    
+    trusted_processes = ["Code.exe", "msedge.exe", "chrome.exe", "firefox.exe", "svchost.exe", "explorer.exe"]
+    is_safe = (src_ip in WHITELISTED_IPS or dst_ip in WHITELISTED_IPS or proc_name in trusted_processes)
+
+    # 2. MONITORING (Tampilkan SEMUA paket ke GUI, tanpa terkecuali)
+    app.after(0, app.add_packet_row, src_ip, dst_ip, proto, pid, proc_name)
+    app.update_graph(src_ip, dst_ip)
+
+    # 3. LOGIKA ALERT (Hanya untuk yang BERBAHAYA)
+    if is_beaconing and not is_safe:
+        total_threats += 1
+        update_ui_stats()
+        app.after(0, app.add_threat, src_ip, dst_ip, proto, pid, proc_name, msg)
+        app.log(f"ALERT: {msg} dari {src_ip}!")
+    
+    # 4. Analisis Signature & Blacklist (Tetap jalan)
+    if hasattr(packet, 'data'):
+        try:
+            payload = bytes.fromhex(packet.data.data.replace(':', ''))
+            threat_name = engine.check_payload(payload)
+            if threat_name:
+                app.after(0, app.add_threat, src_ip, dst_ip, proto, pid, proc_name, f"SIGNATURE: {threat_name}")
+                app.log(f"ALERT: Malicious Payload {threat_name}!")
+        except: pass
         
-        # --- Proses ARP ---
-        if hasattr(packet, 'arp'):
-            src_ip = packet.arp.src_proto_ipv4
-            dst_ip = packet.arp.dst_proto_ipv4
-            proto = "ARP"
-            
-            # Cek Spoofing
-            is_spoofed, msg = detect_arp_spoofing(packet)
-            if is_spoofed:
-                app.after(0, app.add_packet_row, src_ip, dst_ip, proto, "N/A", "System (ATTACK!)")
-                app.after(0, app.add_threat, src_ip, dst_ip, proto, "N/A", "System", msg)
-                app.log(msg)
-            else:
-                app.after(0, app.add_packet_row, src_ip, dst_ip, proto, "N/A", "System")
-            
-            # Kirim ke Peta
-            app.update_graph(src_ip, dst_ip)
+    if src_ip != "N/A" and src_ip in threat_list and not is_safe:
+        app.after(0, app.add_threat, src_ip, dst_ip, "UNKNOWN", 0, "N/A", "Malicious IP Source")
+        app.log(f"ALERT: IP {src_ip} dalam database blacklist!")
+        block_ip(src_ip)
 
-        # --- Proses IP (TCP/UDP/Lainnya) ---
-        if hasattr(packet, 'ip'):
-            src_ip = packet.ip.src
-            dst_ip = packet.ip.dst
-            proto = packet.transport_layer if hasattr(packet, 'transport_layer') else "IP"
-            
-            name = proc_name if 'proc_name' in locals() else "Unknown"
-            is_beaconing, msg = analyze_stateful_behavior(src_ip, dst_ip, proto, pid, name)
-            if is_beaconing:
-                app.after(0, app.add_threat, src_ip, dst_ip, proto, pid, proc_name, msg)
-                app.log(f"ALERT: {msg} dari {src_ip}!")
+    # 5. Deteksi Flooding
+    if src_ip != "N/A" and detect_flooding(src_ip):
+        app.log(f"ALERT: FLOODING dari {src_ip}!")
+        block_ip(src_ip)
 
-            if src_ip in threat_list:
-                app.log(f"ALERT: IP {src_ip} terdeteksi dalam Database Ancaman Global!")
-                app.after(0, app.add_threat, src_ip, packet.ip.dst, "UNKNOWN", 0, "N/A", "Malicious IP Source")
-                # Kita bisa memicu auto-block juga di sini
-                from core.mitigator import block_ip
-                block_ip(src_ip)
-
-            if hasattr(packet, 'data'):
+        # 3. Analisis Payload/Signature
+        if hasattr(packet, 'data'):
+            try:
                 payload = bytes.fromhex(packet.data.data.replace(':', ''))
                 threat_name = engine.check_payload(payload)
                 if threat_name:
+                    total_threats += 1
+                    update_ui_stats()
                     app.after(0, app.add_threat, src_ip, dst_ip, proto, pid, proc_name, f"SIGNATURE: {threat_name}")
-                    app.log(f"ALERT: Pola {threat_name} terdeteksi dari {src_ip}!")
+            except: pass
 
-            # Cari PID/Process jika ada port
-            if hasattr(packet, 'transport_layer'):
-                try:
-                    src_port = int(packet[packet.transport_layer].srcport)
-                    pid, proc_name = get_process_by_port(src_port)
-                except:
-                    pass
+        # 4. TAMPILKAN KE GUI
+        app.after(0, app.add_packet_row, src_ip, dst_ip, proto, pid, proc_name)
+        app.update_graph(src_ip, dst_ip)
 
-                # Analisis Keamanan (hanya untuk paket IP)
-                if analyze_nmap(src_ip, int(packet[packet.transport_layer].dstport) if hasattr(packet[packet.transport_layer], 'dstport') else 0):
-                    app.after(0, app.add_threat, src_ip, dst_ip, proto, pid, proc_name, "Nmap Scan")
-            
-            # Update GUI & Peta
-            app.after(0, app.add_packet_row, src_ip, dst_ip, proto, pid, proc_name)
-            app.update_graph(src_ip, dst_ip)
-
-        # 3. Deteksi Flooding (Global)
+        # 5. Deteksi Flooding
         if src_ip != "N/A" and detect_flooding(src_ip):
             msg = f"ALERT: FLOODING dari {src_ip}!"
             app.log(msg)
             block_ip(src_ip)
-
-    except Exception as e:
-        # Error diamankan agar sniffer tidak mati
-        pass
 
 # --- CALLBACK UNTUK TOMBOL ---
 
@@ -194,6 +204,16 @@ def reset_counter():
             app.after(0, app.update_graph, packet_count_per_second)
         # Reset counter
         packet_count_per_second = 0
+
+def update_ui_stats():
+    global total_threats, total_packets
+    if 'app' in globals():
+        # Hitung skor kesehatan (sederhana: 100 - (ancaman * 5))
+        health_score = max(0, 100 - (total_threats * 5))
+        
+        # Kirim update ke UI menggunakan after() agar aman untuk thread
+        app.after(0, lambda: app.update_stats(total_threats, total_packets))
+        app.after(0, lambda: app.card_status.update_health(health_score))
 
 def stop_monitor():
     global sniffer_instance, monitor_running
