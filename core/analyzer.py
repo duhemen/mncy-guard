@@ -1,5 +1,7 @@
 import time
 from core.filter_logic import should_ignore_alert
+import math
+from collections import Counter
 
 port_history = {}
 connection_history = {}
@@ -7,6 +9,26 @@ last_seen = {}
 
 # Tambahkan variabel untuk mencatat waktu terakhir peringatan (Sistem Cooldown)
 last_alert_time = {}
+
+# 1. Rumus Shannon Entropy
+def calculate_entropy(data):
+    if not data: return 0
+    counts = Counter(data)
+    total_bytes = len(data)
+    entropy = 0
+    for count in counts.values():
+        p_x = count / total_bytes
+        entropy -= p_x * math.log2(p_x)
+    return entropy
+
+# 2. Signature Checker
+BAD_PATTERNS = [b"powershell", b"cmd.exe", b"\x4D\x5A", b"EVIL_MARKER"]
+
+def check_payload(payload):
+    for pattern in BAD_PATTERNS:
+        if pattern in payload.lower(): # .lower agar tidak peduli huruf besar/kecil
+            return f"Match: {pattern}"
+    return None
 
 def analyze_nmap(src_ip, dst_port):
     current_time = time.time()

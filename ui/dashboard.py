@@ -25,12 +25,16 @@ class Dashboard(ttk.Window):
             return ip in threat_list
         except:
             return False
+    def set_data(self, threats, packets):
+        """Fungsi ini dipanggil langsung dari main.py"""
+        self.update_stats(threats, packets)
 
     def __init__(self, start_scan_callback, stop_callback):
         super().__init__(themename="darkly")
         self.title("Mncy-Guard Security Center")
         self.geometry("900x700")
         self.stop_callback = stop_callback
+        self.is_monitoring = False
 
         # 1. Notebook sebagai kontainer utama
         self.notebook = ttk.Notebook(self)
@@ -128,14 +132,25 @@ class Dashboard(ttk.Window):
         self.status_label.pack(side=BOTTOM, fill=X)
 
     # --- FUNGSI FUNGSI ---
+    
+    def update_stats(self, threat_count, packet_count):
+        """Metode ini dipanggil oleh main.py untuk memperbarui statistik."""
+        # Menggunakan .after() memastikan GUI terupdate di main thread (thread aman)
+        self.after(0, self._perform_stats_update, threat_count, packet_count)
 
-    def update_stats(self, threat_count=None, packet_count=None):
-        """Memperbarui nilai pada kartu statistik."""
-        if threat_count is not None:
-            self.card_threats.update_value(str(threat_count))
+    def _perform_stats_update(self, threat_count, packet_count):
+        """Fungsi internal untuk mengubah nilai label pada card."""
+        print(f"DEBUG: Mengupdate UI Card -> Threats: {threat_count}, Packets: {packet_count}")
         
-        if packet_count is not None:
+        if hasattr(self, 'card_threats'):
+            self.card_threats.update_value(str(threat_count))
+        else:
+            print("ERROR: card_threats tidak ditemukan!")
+            
+        if hasattr(self, 'card_packets'):
             self.card_packets.update_value(str(packet_count))
+        else:
+            print("ERROR: card_packets tidak ditemukan!")
 
     def setup_graph(self):
         import networkx as nx
@@ -152,35 +167,43 @@ class Dashboard(ttk.Window):
         self.data_queue.put((src_ip, dst_ip))
 
     def process_queue(self):
+        # 1. Cek monitoring: Tetap gunakan ini untuk penghematan resource
+        if not getattr(self, 'is_monitoring', False):
+            self.after(1000, self.process_queue)
+            return
+
         try:
+            # 2. HAPUS: import main dan self.update_stats()
+            # Sekarang stats sudah diupdate langsung oleh main.py lewat fungsi update_stats() kita sebelumnya.
+
+            # 3. PROSES DATA QUEUE (Fokus hanya pada grafik)
             if not self.data_queue.empty():
                 while not self.data_queue.empty():
                     src_ip, dst_ip = self.data_queue.get()
                     target = dst_ip if dst_ip is not None else "Unknown"
                     if src_ip != "N/A":
-                        if self.is_threat(src_ip):
-                            self.G.add_edge(src_ip, target, color='red', weight=2)
-                        else:
-                            self.G.add_edge(src_ip, target, color='green', weight=1)
-
-                # Render grafik dengan proteksi
-                if hasattr(self, 'ax') and hasattr(self, 'G'):
-                    self.ax.clear()
-                    self.ax.set_facecolor('#2c3e50')
+                        color = 'red' if self.is_threat(src_ip) else 'green'
+                        self.G.add_edge(src_ip, target, color=color, weight=2)
+                
+                # Render Grafik
+                self.ax.clear()
+                self.ax.set_facecolor('#2c3e50')
+                
+                # Gunakan try-except khusus grafik untuk menghindari crash jika G kosong
+                if self.G.nodes():
                     pos = nx.spring_layout(self.G, k=0.5, seed=42)
-                    
                     nx.draw_networkx_nodes(self.G, pos, ax=self.ax, node_size=300, node_color='cyan')
                     nx.draw_networkx_labels(self.G, pos, ax=self.ax, font_size=8, font_color='white')
                     
                     for u, v, d in self.G.edges(data=True):
-                        nx.draw_networkx_edges(self.G, pos, ax=self.ax, edgelist=[(u, v)], edge_color=d.get('color', 'green'), width=2)
-                    
-                    self.canvas.draw()
+                        nx.draw_networkx_edges(self.G, pos, ax=self.ax, edgelist=[(u, v)], 
+                                               edge_color=d.get('color', 'green'), width=2)
+                
+                self.canvas.draw()
+                
         except Exception as e:
-            # Mengabaikan error render sementara agar UI tidak crash
-            pass
+            print(f"Error process_queue: {e}")
         finally:
-            # Tetap panggil setelah 1 detik, apapun yang terjadi
             self.after(1000, self.process_queue)
     
     def apply_filter(self, event=None):
