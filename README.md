@@ -36,7 +36,7 @@ mncy-guard/
 ├── config.py     # Konfigurasi variabel aplikasi
 └── main.py       # Titik masuk utama aplikasi
 
-🛠 Instalasi
+## 🛠 Instalasi
 Pastikan Python telah terinstal di sistem Anda, lalu jalankan perintah berikut di terminal:
 
 Clone repository:
@@ -52,7 +52,8 @@ Jalankan aplikasi:
 
 Bash
 python main.py
-📜 Lisensi
+
+## 📜 Lisensi
 Proyek ini dilisensikan di bawah MIT License.
 
 Dibuat dengan dedikasi untuk keamanan jaringan
