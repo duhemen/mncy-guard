@@ -17,6 +17,49 @@ from ui.widgets import SummaryCard, HealthCard
 
 class Dashboard(ttk.Window):
 
+    def setup_settings_tab(self):
+        # Membuat tab baru
+        self.settings_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.settings_tab, text="Security Settings")
+        
+        # Panel API Key
+        ttk.Label(self.settings_tab, text="AbuseIPDB API Key:").pack(pady=5, padx=10, anchor=W)
+        self.api_key_entry = ttk.Entry(self.settings_tab, show="*")
+        self.api_key_entry.pack(fill=X, padx=10)
+        
+        # Panel Whitelist Process
+        ttk.Label(self.settings_tab, text="Add Process to Whitelist (e.g., chrome.exe):").pack(pady=5, padx=10, anchor=W)
+        self.process_entry = ttk.Entry(self.settings_tab)
+        self.process_entry.pack(fill=X, padx=10)
+        
+        # Tombol Simpan
+        ttk.Button(self.settings_tab, text="Save Configuration", command=self.save_settings).pack(pady=20)
+
+    def save_settings(self):
+        import json
+        config_path = "config/user_config.json"
+        
+        # 1. Baca file yang ada
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            
+            # 2. Update data
+            new_proc = self.process_entry.get()
+            if new_proc and new_proc not in config['whitelist_processes']:
+                config['whitelist_processes'].append(new_proc)
+            
+            config['api_keys']['abuseipdb'] = self.api_key_entry.get()
+            
+            # 3. Simpan kembali
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=4)
+            
+            self.log("Settings saved successfully!")
+            messagebox.showinfo("Success", "Konfigurasi telah diperbarui.")
+        except Exception as e:
+            self.log(f"Error saving settings: {e}")
+
     def is_threat(self, ip):
         """Memeriksa apakah IP ada di daftar ancaman (bisa dihubungkan ke modul intelligence)."""
         # Kamu bisa mengimpor threat_list dari core.intelligence jika sudah ada
@@ -40,6 +83,7 @@ class Dashboard(ttk.Window):
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
+        
         # 2. Tab Monitoring
         self.main_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.main_tab, text="Network Monitor")
@@ -60,6 +104,10 @@ class Dashboard(ttk.Window):
         self.card_packets = SummaryCard(self.stats_frame, "Total Paket", "0", "info")
         self.card_status = HealthCard(self.stats_frame, "Kesehatan", "100", "success")
         # ---------------------------------
+
+        # --- SISIPKAN DI SINI ---
+        self.setup_settings_tab()
+        # ------------------------
 
         # Tabel Data Capture (Di dalam main_tab)
         cols = ("Time", "Src", "Dst", "Proto", "PID", "Process", "Status")
@@ -139,18 +187,15 @@ class Dashboard(ttk.Window):
         self.after(0, self._perform_stats_update, threat_count, packet_count)
 
     def _perform_stats_update(self, threat_count, packet_count):
-        """Fungsi internal untuk mengubah nilai label pada card."""
         print(f"DEBUG: Mengupdate UI Card -> Threats: {threat_count}, Packets: {packet_count}")
         
+        # Panggil metode yang sudah ada di SummaryCard
+        # Kita panggil .update_value() karena itu yang kamu definisikan di ui/widgets.py
         if hasattr(self, 'card_threats'):
             self.card_threats.update_value(str(threat_count))
-        else:
-            print("ERROR: card_threats tidak ditemukan!")
-            
+        
         if hasattr(self, 'card_packets'):
             self.card_packets.update_value(str(packet_count))
-        else:
-            print("ERROR: card_packets tidak ditemukan!")
 
     def setup_graph(self):
         import networkx as nx
@@ -461,6 +506,23 @@ class Dashboard(ttk.Window):
         self.tree_net.insert("", 0, values=(now, src, dst, proto, pid, name, reason), tags=('danger',))
         # Masukkan juga ke tree bawah (log ancaman)
         self.tree.insert("", 0, values=(now, src, dst, proto, pid, name, reason))
+
+    def save_config(self):
+        # Mengambil teks dari Entry widget
+        api_key = self.api_key_entry.get()
+        whitelist_process = self.whitelist_entry.get()
+    
+        config_data = {
+            "api_keys": {"abuseipdb": api_key},
+            "whitelist": [process.strip() for process in whitelist_process.split(",")]
+        }
+    
+        # Simpan ke file JSON
+        import json
+        with open("config/user_config.json", "w") as f:
+            json.dump(config_data, f, indent=4)
+    
+        print("DEBUG: Konfigurasi berhasil disimpan!")
 
     def on_closing(self):
         """Fungsi ini dipanggil saat tombol X diklik."""

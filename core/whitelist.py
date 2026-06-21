@@ -1,21 +1,39 @@
-# C:\mncy\core\whitelist.py
+import json
+import os
+import socket
 
-# Daftar proses sistem Windows yang krusial
-WHITELISTED_PROCESSES = {
-    "system", "smss.exe", "csrss.exe", "wininit.exe", 
-    "services.exe", "lsass.exe", "svchost.exe", "explorer.exe", 
-    "dwm.exe", "taskhostw.exe", "winlogon.exe", "python.exe" # python.exe penting!
-}
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'user_config.json')
 
-# Daftar IP yang tidak boleh diblokir (Gateway, Localhost, DNS Server)
-WHITELISTED_IPS = {"127.0.0.1", "192.168.1.1", "8.8.8.8"}
+def load_config():
+    """Membaca konfigurasi dari file JSON."""
+    if not os.path.exists(CONFIG_PATH):
+        return {"whitelist_ips": [], "whitelist_processes": []}
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error membaca konfigurasi: {e}")
+        return {"whitelist_ips": [], "whitelist_processes": []}
 
 def is_whitelisted(process_name=None, ip_address=None):
-    """Cek apakah proses atau IP aman untuk diabaikan."""
-    if process_name:
-        if process_name.lower() in WHITELISTED_PROCESSES:
-            return True
+    config = load_config()
+    
+    # 1. CEK OTOMATIS IP LOKAL (Tanpa perlu .add())
     if ip_address:
-        if ip_address in WHITELISTED_IPS:
+        # Mendapatkan IP lokal mesin saat ini
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        if ip_address == local_ip or ip_address == "127.0.0.1":
             return True
+            
+        # Cek dari file JSON
+        if ip_address in config.get('whitelist_ips', []):
+            return True
+            
+    # 2. Cek Proses
+    if process_name:
+        whitelist_procs = [p.lower() for p in config.get('whitelist_processes', [])]
+        if process_name.lower() in whitelist_procs:
+            return True
+            
     return False

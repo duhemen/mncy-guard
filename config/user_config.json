@@ -1,0 +1,29 @@
+{
+    "whitelist_ips": [
+        "127.0.0.1",
+        "192.168.1.1",
+        "8.8.8.8",
+        "192.168.43.139"
+    ],
+    "whitelist_processes": [
+        "system",
+        "smss.exe",
+        "csrss.exe",
+        "wininit.exe",
+        "services.exe",
+        "lsass.exe",
+        "svchost.exe",
+        "explorer.exe",
+        "dwm.exe",
+        "taskhostw.exe",
+        "winlogon.exe",
+        "python.exe",
+        "explorer.exe, svchost.exe, dwm.exe, System, SearchHost.exe, RuntimeBroker.exe, taskhostw.exe, msedge.exe, chrome.exe, firefox.exe, brave.exe, Code.exe, conhost.exe, csrss.exe, wininit.exe",
+        "msedge.exe",
+        "msedge.exe, StartMenuExperienceHost.exe"
+    ],
+    "blacklist_ips": [],
+    "api_keys": {
+        "abuseipdb": "9ff1ebdedce350e5523073493e3187286856fd02a1278225aee123420c3b7f3c526fa9d4332dda24"
+    }
+}

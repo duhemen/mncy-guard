@@ -1,19 +1,30 @@
 import requests
+import json
+import os
 
-# URL contoh untuk feed IP jahat (bisa diganti dengan API lain seperti AbuseIPDB)
-FEED_URL = "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"
+CONFIG_PATH = "config/user_config.json"
 
-def get_threat_intelligence():
-    """Mengunduh daftar IP berbahaya dari internet."""
+def get_api_key():
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+            return config.get('api_keys', {}).get('abuseipdb', '')
+    return ''
+
+def check_ip_reputation(ip_address):
+    api_key = get_api_key()
+    if not api_key:
+        return None # API Key belum diisi
+
+    url = 'https://api.abuseipdb.com/api/v2/check'
+    params = {'ipAddress': ip_address, 'maxAgeInDays': '90'}
+    headers = {'Key': api_key, 'Accept': 'application/json'}
+    
     try:
-        response = requests.get(FEED_URL, timeout=10)
+        response = requests.get(url, params=params, headers=headers)
         if response.status_code == 200:
-            # Membersihkan data: ambil baris yang bukan komentar
-            ips = [line for line in response.text.splitlines() if not line.startswith('#') and line.strip()]
-            return set(ips)
+            data = response.json()
+            return data['data']['abuseConfidenceScore']
     except Exception as e:
-        print(f"Gagal update intelijen: {e}")
-    return set()
-
-# Inisialisasi daftar ancaman di memori
-threat_list = get_threat_intelligence()
+        print(f"Error checking IP reputation: {e}")
+    return 0

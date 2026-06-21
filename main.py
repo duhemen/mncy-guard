@@ -20,11 +20,12 @@ from core.analyzer import analyze_nmap, analyze_beaconing, analyze_stateful_beha
 from core.network_shield import detect_arp_spoofing, detect_flooding, quarantine_process, release_process, get_quarantine_data
 from core.mitigator import block_ip
 from core.engine import engine
-from core.intelligence import threat_list
-from core.whitelist import WHITELISTED_IPS
+from core.intelligence import check_ip_reputation
+from core.whitelist import is_whitelisted
 from core.analyzer import calculate_entropy, check_payload
 from core.filter_logic import should_ignore_alert
 import traceback
+
 
 # --- Pesan Pembuka Profesional ---
 print("========================================")
@@ -38,10 +39,8 @@ init_db()
 
 # Variabel Global untuk mengelola Thread
 sniffer_instance = None
-monitor_running = True # Flag untuk menghentikan loop scanner
+monitor_running = True
 packet_count_per_second = 0
-
-# Tambahkan ini:
 total_packets = 0
 total_threats = 0
 
@@ -56,11 +55,6 @@ def get_current_ip():
     finally:
         s.close()
     return local_ip
-
-# 3. Update Whitelist secara otomatis saat startup
-current_ip = get_current_ip()
-WHITELISTED_IPS.add(current_ip)
-print(f"[SYSTEM]: IP lokal {current_ip} telah ditambahkan ke whitelist.")
 
 # Di dalam main.py
 def run_system_monitor(ui):
@@ -88,12 +82,9 @@ def trigger_alert(threat_msg, ip_target):
 
 def on_packet_captured(packet):
     global packet_count_per_second, total_packets, total_threats
-    total_packets += 1
     
-    # 1. INISIALISASI & EKSTRAKSI (Lakukan ini di PALING AWAL)
-    src_ip, dst_ip = "N/A", "N/A"
-    proto = "Unknown"
-    pid, proc_name = "0", "N/A"
+    # 1. Ekstraksi Data
+    src_ip, dst_ip, proto, pid, proc_name = "N/A", "N/A", "Unknown", "0", "N/A"
 
     if hasattr(packet, 'arp'):
         src_ip, dst_ip, proto = packet.arp.src_proto_ipv4, packet.arp.dst_proto_ipv4, "ARP"
@@ -105,111 +96,70 @@ def on_packet_captured(packet):
             try:
                 src_port = int(packet[packet.transport_layer].srcport)
                 pid, proc_name = get_process_by_port(src_port)
-            except:
-                pass
+            except: pass
 
-    # 2. UPDATE STATISTIK (Setelah data terekstraksi)
+    # 2. Statistik
     packet_count_per_second += 1
     total_packets += 1
-    update_ui_stats() # Sekarang statistik punya data yang valid
+    update_ui_stats()
 
-    # 3. ANALISIS PERILAKU
+    # 3. Analisis Perilaku & Whitelist
     is_beaconing, msg = analyze_stateful_behavior(src_ip, dst_ip, proto, pid, proc_name)
     trusted_processes = ["Code.exe", "msedge.exe", "chrome.exe", "firefox.exe", "svchost.exe", "explorer.exe"]
-    is_safe = (src_ip in WHITELISTED_IPS or dst_ip in WHITELISTED_IPS or proc_name in trusted_processes)
+    is_safe = (is_whitelisted(ip_address=src_ip) or is_whitelisted(ip_address=dst_ip) or proc_name in trusted_processes)
 
-    # 4. KIRIM KE GUI (Tampilkan row & update graph)
-    app.after(0, app.add_packet_row, src_ip, dst_ip, proto, pid, proc_name)
-    app.update_graph(src_ip, dst_ip)
-
-   # 5. LOGIKA ALERT
+    # 4. Logika Alert
     if is_beaconing and not is_safe:
-        total_threats += 1
-        print(f"DEBUG: Ancaman terdeteksi! Total Threats sekarang: {total_threats}") # <--- TAMBAHKAN INI
-        update_ui_stats()
+        total_threats += 1  # <--- WAJIB ADA
+        update_ui_stats()   # <--- WAJIB ADA agar angka di dashboard berubah
         app.after(0, app.add_threat, src_ip, dst_ip, proto, pid, proc_name, msg)
-    
-    # 4. Analisis Signature & Blacklist (Tetap jalan)
+
+    # 5. Analisis Payload (Signature, Entropy, Blacklist, API Reputasi)
     if hasattr(packet, 'data') and hasattr(packet.data, 'data'):
         try:
-            # Mengakses data dengan aman
             raw_data = packet.data.data.replace(':', '')
             payload = bytes.fromhex(raw_data)
             
-            # 1. Cek Signature
-            threat_signature = check_payload(payload)
-            if threat_signature:
-                pid_val = int(pid) if str(pid).isdigit() else 0
-                ignore, reason = should_ignore_alert(pid_val, dst_ip)
-                if not ignore:
-                    app.log(f"ALERT: {threat_signature}")
-                    app.add_threat(src_ip, dst_ip, proto, pid, proc_name, threat_signature)
+            # Cek Signature
+            threat_sig = check_payload(payload)
+            if threat_sig:
+                total_threats += 1            # Tambahkan ini
+                update_ui_stats()             # Tambahkan ini
+                app.add_threat(src_ip, dst_ip, proto, pid, proc_name, threat_sig)
 
-            # 2. Cek Entropy
-            if len(payload) > 50:
-                entropy = calculate_entropy(payload)
-                if entropy > 7.5:
-                    pid_val = int(pid) if str(pid).isdigit() else 0
-    
-                    # 1. TETAP TAMBAHKAN STATISTIK (Ini agar Card Ancaman bergerak)
-                    total_threats += 1
-                    update_ui_stats()
-    
-                    # 2. BARU CEK FILTER UNTUK TAMPILAN ALERT
-                    ignore, reason = should_ignore_alert(pid_val, dst_ip)
-                    if not ignore:
-                        app.log(f"ALERT: High Entropy Detected ({entropy:.2f})")
-                        app.add_threat(src_ip, dst_ip, proto, pid, proc_name, f"C&C Beaconing ({entropy:.2f})")
-                    else:
-                        print(f"DEBUG: Alert di-ignore untuk PID {pid_val} (Filter aktif)")
-            
-            # 3. Cek Blacklist
-            if src_ip != "N/A" and src_ip in threat_list and not is_safe:
-                app.after(0, app.add_threat, src_ip, dst_ip, proto, pid, proc_name, "Malicious IP Source")
-                app.log(f"ALERT: IP {src_ip} dalam database blacklist!")
-                block_ip(src_ip)
+            # Cek Entropy
+            if len(payload) > 50 and calculate_entropy(payload) > 7.5:
+                total_threats += 1            # Tambahkan ini
+                update_ui_stats()             # Tambahkan ini
+                app.add_threat(src_ip, dst_ip, proto, pid, proc_name, "High Entropy/Beaconing")
 
-        except (ValueError, TypeError) as e:
-            # Menangani error konversi hex tanpa menghentikan program
-            pass
+            # Cek Reputasi AbuseIPDB
+            if src_ip != "N/A" and not is_safe:
+                score = check_ip_reputation(src_ip)
+                if score and score > 50:
+                    total_threats += 1        # Tambahkan ini
+                    update_ui_stats()         # Tambahkan ini
+                    app.log(f"ALERT: IP {src_ip} memiliki skor ancaman tinggi: {score}%")
+                    app.add_threat(src_ip, dst_ip, proto, pid, proc_name, f"High Reputation Threat ({score}%)")
+                    block_ip(src_ip)
+                        
         except Exception as e:
-            # Ini akan menangkap error lainnya (seperti variabel yang belum terdefinisi)
-            print("--- TERDETEKSI ERROR ---")
-            traceback.print_exc() # Ini akan menampilkan detail error + baris kodenya
-            print("-----------------------")
+            pass # Menghindari crash pada paket malformed
 
-    # 5. Deteksi Flooding
+    # 6. Deteksi Flooding & Update GUI
     if src_ip != "N/A" and detect_flooding(src_ip):
-        app.log(f"ALERT: FLOODING dari {src_ip}!")
         block_ip(src_ip)
+    
+    app.after(0, app.add_packet_row, src_ip, dst_ip, proto, pid, proc_name)
+    app.update_graph(src_ip, dst_ip)
 
-        # 3. Analisis Payload/Signature
-        if hasattr(packet, 'data'):
-            try:
-                # Cek apakah 'data' memiliki field 'data' secara aman
-                # Kita gunakan getattr dengan default None untuk menghindari AttributeError
-                data_field = getattr(packet.data, 'data', None)
-        
-                if data_field:
-                    # Jika ada, baru kita proses
-                    raw_data = data_field.replace(':', '')
-                    payload = bytes.fromhex(raw_data)
-            
-                    # ... (Lanjutkan logika pengecekan Signature & Entropy Emen di sini) ...
-            
-            except Exception as e:
-                # Menangkap error jika konversi hex gagal
-                pass
+# --- FUNGSI PENDUKUNG ---
 
-        # 4. TAMPILKAN KE GUI
-        app.after(0, app.add_packet_row, src_ip, dst_ip, proto, pid, proc_name)
-        app.update_graph(src_ip, dst_ip)
-
-        # 5. Deteksi Flooding
-        if src_ip != "N/A" and detect_flooding(src_ip):
-            msg = f"ALERT: FLOODING dari {src_ip}!"
-            app.log(msg)
-            block_ip(src_ip)
+def run_system_monitor(ui):
+    while monitor_running:
+        for t in scan_processes():
+            ui.after(0, lambda: ui.add_threat(t['pid'], t['name'], "Suspicious"))
+        time.sleep(5)
 
 # --- CALLBACK UNTUK TOMBOL ---
 
@@ -249,17 +199,11 @@ def reset_counter():
             app.after(0, app.update_graph, packet_count_per_second)
         # Reset counter
         packet_count_per_second = 0
-
 def update_ui_stats():
     global total_threats, total_packets
-    
-    # Karena app adalah instance dari Dashboard, panggil langsung.
-    # Kita tetap menggunakan app.after agar thread sniffer tidak 
-    # mengganggu thread utama (GUI).
+    # Pastikan kita mengirim 'total_threats' (variabel global yang tadi ditambah)
     if 'app' in globals():
-        app.after(0, lambda: app.update_stats(total_threats, total_packets))
-    else:
-        print("DEBUG: Instance app belum tersedia.")
+        app.update_stats(total_threats, total_packets)
 
 def stop_monitor():
     global sniffer_instance, monitor_running
